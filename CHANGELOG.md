@@ -13,6 +13,21 @@ All notable changes to this project will be documented in this file.
 - `index.html`: Removed content, kept only a single div.
 - `style.css`: Simplified to basic fundamentals, made the box a 200x200 square.
 
+## [2026-02-26] - Polish & Tweaks (Controls)
+### Changed
+- `script.js`: Increased `FAST_FALL_GRAVITY` from `6000` to `15000` based on user feedback, making the fast fall act more like a downward dash.
+- `script.js`: Added the `Up Arrow` (`ArrowUp`) as an additional input for jumping to pair naturally with the `Down Arrow` fast fall.
+
+## [2026-02-26] - Polish & Tweaks (Dash)
+### Changed
+- `script.js`: Refined the dash mechanic. Added dynamic vertical velocity to the dash based on current movement state (arcs upwards if jumping, angles downwards if falling, slight bump if flat).
+- `script.js`: Applied 20% normal gravity (`ay = GRAVITY_Y * 0.2`) during the dash so it travels in a natural arc.
+- `script.js`: Prevented the dash from being deliberately canceled or reversed mid-dash by pressing the opposite movement key.
+
+## [2026-02-26] - Fast Fall Mechanic
+### Added
+- `script.js`: Added Fast Falling. Holding `Down` or `S` while moving downwards (or near the peak of a jump) drastically increases gravity (`ay = 6000`), allowing for precise, rapid landings.
+
 ## [2026-02-26] - Dash Mechanic
 ### Added
 - `script.js`: Added Dash ability. Pressing `Shift` creates a 0.15-second horizontal burst of speed (`DASH_SPEED = 2000`) in the facing direction, suspending gravity and normal friction. Includes a 0.5-second cooldown.

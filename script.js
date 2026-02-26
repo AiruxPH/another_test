@@ -7,6 +7,7 @@ const FRICTION = 0.85; // Friction multiplier (sliding to a stop)
 const DASH_SPEED = 2000; // Explosive dash velocity
 const DASH_DURATION = 0.15; // How long the dash lasts (seconds)
 const DASH_COOLDOWN = 0.5; // Seconds before next dash is allowed
+const FAST_FALL_GRAVITY = 15000; // Drastically increased gravity when holding down (downward dash)
 
 // Simple PhysicsEntity structure
 const entity = {
@@ -25,7 +26,8 @@ const entity = {
 
 const keys = {
     ArrowLeft: false,
-    ArrowRight: false
+    ArrowRight: false,
+    ArrowDown: false
 };
 
 const box = document.getElementById("main-box");
@@ -33,7 +35,7 @@ let lastTime = 0;
 let jumpBufferTimer = 0; // Timer to remember jump inputs
 
 function handleKeyDown(event) {
-    if (event.code === "Space" || event.key === "w" || event.key === "W") {
+    if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
         if (entity.y === 0) {
             // On the ground: Set a jump buffer for 150ms
             jumpBufferTimer = 0.15;
@@ -45,11 +47,14 @@ function handleKeyDown(event) {
     }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
         keys.ArrowLeft = true;
-        entity.facingDirection = -1;
+        if (!entity.isDashing) entity.facingDirection = -1; // Only change facing if not dashing
     }
     if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
         keys.ArrowRight = true;
-        entity.facingDirection = 1;
+        if (!entity.isDashing) entity.facingDirection = 1; // Only change facing if not dashing
+    }
+    if (event.code === "ArrowDown" || event.key === "s" || event.key === "S") {
+        keys.ArrowDown = true;
     }
     if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
         if (!entity.isDashing && entity.dashCooldownTimer <= 0) {
@@ -57,13 +62,24 @@ function handleKeyDown(event) {
             entity.dashTimer = DASH_DURATION;
             // Instantly override velocity for the dash burst
             entity.vx = DASH_SPEED * entity.facingDirection;
-            entity.vy = 0; // Suspend gravity momentarily
+
+            // Dynamic vertical bump based on current trajectory
+            if (entity.vy < 0) {
+                // Moving up: extend the jump arc slightly
+                entity.vy = -300;
+            } else if (entity.vy > 0) {
+                // Moving down: thrust diagonally downwards
+                entity.vy = 300;
+            } else {
+                // Perfectly flat: slight upward bump
+                entity.vy = -150;
+            }
         }
     }
 }
 
 function handleKeyUp(event) {
-    if (event.code === "Space" || event.key === "w" || event.key === "W") {
+    if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
         // Variable Jump Height: If releasing the jump key while moving upwards, 
         // cut the upward velocity to half. This creates a "short hop".
         if (entity.vy < 0) {
@@ -75,6 +91,9 @@ function handleKeyUp(event) {
     }
     if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
         keys.ArrowRight = false;
+    }
+    if (event.code === "ArrowDown" || event.key === "s" || event.key === "S") {
+        keys.ArrowDown = false;
     }
 }
 
@@ -98,15 +117,20 @@ function gameLoop(timestamp) {
             // Optionally scale down velocity immediately after dash so we don't slide forever
             entity.vx *= 0.5;
         } else {
-            // While dashing, enforce dash velocity and zero gravity
+            // While dashing, enforce dash velocity
             entity.vx = DASH_SPEED * entity.facingDirection;
-            entity.vy = 0;
-            entity.ay = 0;
+            // Apply a fraction of gravity (e.g., 20%) so it arcs slightly downwards over time
+            entity.ay = GRAVITY_Y * 0.2;
             entity.ax = 0;
         }
     } else {
-        // Restore normal gravity when not dashing
-        entity.ay = GRAVITY_Y;
+        // Fast falling: if holding down and moving downwards (or at apex)
+        if (keys.ArrowDown && entity.vy >= -100) {
+            entity.ay = FAST_FALL_GRAVITY;
+        } else {
+            // Restore normal gravity when not dashing
+            entity.ay = GRAVITY_Y;
+        }
 
         // Handle horizontal input (apply acceleration)
         if (keys.ArrowLeft) {
