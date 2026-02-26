@@ -10,6 +10,9 @@ const DASH_COOLDOWN = 0.5; // Seconds before next dash is allowed
 const FAST_FALL_GRAVITY = 15000; // Drastically increased gravity when holding down (downward dash)
 const WALL_BOUNCE = 0.5; // Restitution factor when hitting a wall (0 to 1)
 
+const SPRINT_MAX_SPEED = 1200; // Max horizontal speed when sprinting
+const SPRINT_ACCELERATION = 4000; // Horizontal acceleration when sprinting
+
 // Simple PhysicsEntity structure
 const entity = {
     x: 0,       // current horizontal offset
@@ -22,7 +25,8 @@ const entity = {
     isDashing: false,     // is currently dashing
     dashTimer: 0,         // time left in current dash
     dashCooldownTimer: 0, // time left before can dash again
-    facingDirection: 1    // 1 for right, -1 for left
+    facingDirection: 1,    // 1 for right, -1 for left
+    isSprinting: false    // tracks if the character is sprinting
 };
 
 const keys = {
@@ -34,6 +38,11 @@ const keys = {
 const box = document.getElementById("main-box");
 let lastTime = 0;
 let jumpBufferTimer = 0; // Timer to remember jump inputs
+
+// Variables for double-tap detection
+let lastLeftTapTime = 0;
+let lastRightTapTime = 0;
+const DOUBLE_TAP_DELAY = 0.25; // seconds
 
 function handleKeyDown(event) {
     if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
@@ -50,10 +59,24 @@ function handleKeyDown(event) {
         }
     }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
+        if (!keys.ArrowLeft) { // newly pressed
+            const now = performance.now() / 1000;
+            if (now - lastLeftTapTime < DOUBLE_TAP_DELAY) {
+                entity.isSprinting = true;
+            }
+            lastLeftTapTime = now;
+        }
         keys.ArrowLeft = true;
         if (!entity.isDashing) entity.facingDirection = -1; // Only change facing if not dashing
     }
     if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
+        if (!keys.ArrowRight) { // newly pressed
+            const now = performance.now() / 1000;
+            if (now - lastRightTapTime < DOUBLE_TAP_DELAY) {
+                entity.isSprinting = true;
+            }
+            lastRightTapTime = now;
+        }
         keys.ArrowRight = true;
         if (!entity.isDashing) entity.facingDirection = 1; // Only change facing if not dashing
     }
@@ -92,9 +115,11 @@ function handleKeyUp(event) {
     }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
         keys.ArrowLeft = false;
+        if (!keys.ArrowRight) entity.isSprinting = false; // Stop sprinting if released
     }
     if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
         keys.ArrowRight = false;
+        if (!keys.ArrowLeft) entity.isSprinting = false; // Stop sprinting if released
     }
     if (event.code === "ArrowDown" || event.key === "s" || event.key === "S") {
         keys.ArrowDown = false;
@@ -137,14 +162,17 @@ function gameLoop(timestamp) {
         }
 
         // Handle horizontal input (apply acceleration)
+        let currentAcceleration = entity.isSprinting ? SPRINT_ACCELERATION : MOVE_ACCELERATION;
+
         if (keys.ArrowLeft) {
-            entity.ax = -MOVE_ACCELERATION;
+            entity.ax = -currentAcceleration;
             entity.facingDirection = -1;
         } else if (keys.ArrowRight) {
-            entity.ax = MOVE_ACCELERATION;
+            entity.ax = currentAcceleration;
             entity.facingDirection = 1;
         } else {
             entity.ax = 0; // stop accelerating when key is released
+            entity.isSprinting = false; // ensure sprinting stops when keys are released entirely
         }
     }
 
@@ -168,8 +196,9 @@ function gameLoop(timestamp) {
         entity.vx *= Math.pow(FRICTION, elapsed * 60);
 
         // Clamp velocity to max speed (only when not dashing)
-        if (entity.vx > MAX_SPEED) entity.vx = MAX_SPEED;
-        if (entity.vx < -MAX_SPEED) entity.vx = -MAX_SPEED;
+        let currentMaxSpeed = entity.isSprinting ? SPRINT_MAX_SPEED : MAX_SPEED;
+        if (entity.vx > currentMaxSpeed) entity.vx = currentMaxSpeed;
+        if (entity.vx < -currentMaxSpeed) entity.vx = -currentMaxSpeed;
 
         // Stop completely if moving very slowly to avoid micro-sliding
         if (Math.abs(entity.vx) < 5 && entity.ax === 0) entity.vx = 0;
