@@ -12,7 +12,8 @@ const entity = {
     vx: 0,      // velocity in x
     vy: 0,      // velocity in y
     ax: 0,      // acceleration in x
-    ay: GRAVITY_Y // acceleration in y (gravity)
+    ay: GRAVITY_Y, // acceleration in y (gravity)
+    hasDoubleJumped: false // tracks if double jump was used
 };
 
 const keys = {
@@ -26,8 +27,14 @@ let jumpBufferTimer = 0; // Timer to remember jump inputs
 
 function handleKeyDown(event) {
     if (event.code === "Space" || event.key === "w" || event.key === "W") {
-        // Set a jump buffer for 150ms (0.15 seconds)
-        jumpBufferTimer = 0.15;
+        if (entity.y === 0) {
+            // On the ground: Set a jump buffer for 150ms
+            jumpBufferTimer = 0.15;
+        } else if (!entity.hasDoubleJumped) {
+            // In the air and haven't double jumped yet: jump instantly
+            entity.vy = JUMP_VELOCITY;
+            entity.hasDoubleJumped = true;
+        }
     }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
         keys.ArrowLeft = true;
@@ -100,6 +107,7 @@ function gameLoop(timestamp) {
     // Collision Detection & Resolution (Listing 2, 7, 8 concept - simplified to a floor constraint)
     if (entity.y > 0) {
         entity.y = 0; // Rest position (floor)
+        entity.hasDoubleJumped = false; // Reset double jump when landing
         // Stop vertical motion only if we aren't currently jumping up
         if (entity.vy > 0) {
             entity.vy = 0;

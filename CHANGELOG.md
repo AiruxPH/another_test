@@ -13,6 +13,14 @@ All notable changes to this project will be documented in this file.
 - `index.html`: Removed content, kept only a single div.
 - `style.css`: Simplified to basic fundamentals, made the box a 200x200 square.
 
+## [2026-02-26] - Double Jump
+### Added
+- `script.js`: Added `hasDoubleJumped` state to the physics entity. You can now press the jump key a second time while in the air to execute a double jump.
+
+## [2026-02-26] - Polish & Tweaks
+### Changed
+- `style.css`: Reduced the square size from 100x100 to 40x40 to make the movement mechanics feel more proportional to its visual weight.
+
 ## [2026-02-26] - Variable Jump Height
 ### Added
 - `script.js`: Added jump cut logic in `handleKeyUp`. Releasing the jump key (Space or W) while moving upwards reduces the upward velocity, allowing for short taps to result in small hops, and holding the button to provide full jump height.
