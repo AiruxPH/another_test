@@ -13,6 +13,9 @@ const WALL_BOUNCE = 0.5; // Restitution factor when hitting a wall (0 to 1)
 const SPRINT_MAX_SPEED = 1200; // Max horizontal speed when sprinting
 const SPRINT_ACCELERATION = 4000; // Horizontal acceleration when sprinting
 
+const PLAYER_SIZE = 40; // Player width/height in px
+const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
+
 // Simple PhysicsEntity structure
 const entity = {
     x: 0,       // current horizontal offset
@@ -26,7 +29,8 @@ const entity = {
     dashTimer: 0,         // time left in current dash
     dashCooldownTimer: 0, // time left before can dash again
     facingDirection: 1,    // 1 for right, -1 for left
-    isSprinting: false    // tracks if the character is sprinting
+    isSprinting: false,    // tracks if the character is sprinting
+    onGround: true         // tracked by collision engine
 };
 
 const keys = {
@@ -44,12 +48,47 @@ let lastLeftTapTime = 0;
 let lastRightTapTime = 0;
 const DOUBLE_TAP_DELAY = 0.25; // seconds
 
+// --- PLATFORMS ---
+// Coordinates are relative to the player's start position (0,0)
+const platforms = [
+    { x: -300, y: -100, width: 200, height: 20 }, // Left step
+    { x: 100, y: -200, width: 200, height: 20 },  // Right high step
+    { x: -100, y: -350, width: 200, height: 20 }  // Top middle step
+];
+
+// Reference to HTML container to append platforms
+const container = document.querySelector('.container');
+
+function initPlatforms() {
+    platforms.forEach(plat => {
+        const platDiv = document.createElement('div');
+        platDiv.classList.add('platform');
+        platDiv.style.width = plat.width + 'px';
+        platDiv.style.height = plat.height + 'px';
+
+        // Since the container is horizontally centered and bottom aligned...
+        // We match exactly the transform logic we use for the player entity.
+        // We offset the rendering by subtracting half the width and height so (x,y) represents the center of the platform
+        const renderX = plat.x - (plat.width / 2);
+        // Important: CSS transforms visually translate Y downwards if positive. 
+        // Our physics Y is negative upwards. But because the HTML sets origin at top-left of the centered container,
+        // we just push it down/up using translation.
+        const renderY = plat.y - (plat.height / 2);
+
+        platDiv.style.transform = `translate(${renderX}px, ${renderY}px)`;
+        container.appendChild(platDiv);
+    });
+}
+// Run once on load
+initPlatforms();
+// -----------------
+
 function handleKeyDown(event) {
     if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
-        if (entity.y === 0) {
+        if (entity.onGround) {
             // On the ground: jump instantly
             entity.vy = JUMP_VELOCITY;
-        } else if (entity.vy > 0 && entity.y < 100) {
+        } else if (entity.vy > 0 && Math.abs(entity.y) < 100) {
             // Falling and very close to the ground: buffer a ground jump for when we land
             jumpBufferTimer = 0.15;
         } else if (!entity.hasDoubleJumped) {
@@ -205,14 +244,64 @@ function gameLoop(timestamp) {
     }
 
     // p(n+1) = v * t + p(n)
-    entity.y += entity.vy * elapsed;
+
+    // 1. Move X and check horizontal collisions
     entity.x += entity.vx * elapsed;
+    for (let p of platforms) {
+        if (checkAABB(entity, p)) {
+            if (entity.vx > 0) {
+                // Moving right, hit left edge
+                entity.x = p.x - (p.width / 2) - PLAYER_HALF_SIZE;
+            } else if (entity.vx < 0) {
+                // Moving left, hit right edge
+                entity.x = p.x + (p.width / 2) + PLAYER_HALF_SIZE;
+            }
+            entity.vx = 0;
+            if (entity.isDashing) {
+                entity.isDashing = false;
+                entity.dashCooldownTimer = DASH_COOLDOWN;
+            }
+        }
+    }
+
+    // 2. Move Y and check vertical collisions
+    // Track floor state to allow jumping
+    let onFloor = false;
+    entity.y += entity.vy * elapsed;
+
+    for (let p of platforms) {
+        if (checkAABB(entity, p)) {
+            if (entity.vy > 0) {
+                // Falling down, landed on top
+                entity.y = p.y - (p.height / 2) - PLAYER_HALF_SIZE;
+                entity.vy = 0;
+                onFloor = true;
+                entity.hasDoubleJumped = false; // Reset double jump
+            } else if (entity.vy < 0) {
+                // Jumping up, hit bottom (bonk head)
+                entity.y = p.y + (p.height / 2) + PLAYER_HALF_SIZE;
+                entity.vy = 0;
+            }
+        }
+    }
+
+    // Original Floor Constraint (y = 0 is absolute bottom floor)
+    if (entity.y >= 0) {
+        entity.y = 0;
+        entity.hasDoubleJumped = false;
+        onFloor = true;
+        if (entity.vy > 0) entity.vy = 0;
+    }
+
+    // If we are on ANY valid floor surface, allow ground jumps (buffered or future)
+    // Note: The jump condition check in handleKeyDown needs to know if we are on floor. 
+    // We update a global or entity property so events can see it.
+    entity.onGround = onFloor;
 
     // --- SCREEN BOUNDS (Walls) ---
     // The square is centered at x=0. 
     // The window width is window.innerWidth. 
-    // The square width is 40px (so 20px on each side of center).
-    const max_x = (window.innerWidth / 2) - 20;
+    const max_x = (window.innerWidth / 2) - PLAYER_HALF_SIZE;
     const min_x = -max_x;
 
     if (entity.x > max_x) {
@@ -249,6 +338,25 @@ function gameLoop(timestamp) {
 
     // Request next frame
     requestAnimationFrame(gameLoop);
+}
+
+// AABB Collision Helper
+// Returns true if entity rect overlaps platform rect
+function checkAABB(ent, plat) {
+    // Player is PLAYER_SIZE, centered
+    const pLeft = ent.x - PLAYER_HALF_SIZE;
+    const pRight = ent.x + PLAYER_HALF_SIZE;
+    const pTop = ent.y - PLAYER_HALF_SIZE;
+    const pBottom = ent.y + PLAYER_HALF_SIZE;
+
+    // Platform is centered at (plat.x, plat.y)
+    const bLeft = plat.x - (plat.width / 2);
+    const bRight = plat.x + (plat.width / 2);
+    const bTop = plat.y - (plat.height / 2);
+    const bBottom = plat.y + (plat.height / 2);
+
+    // strictly < and > to prevent sticking when perfectly adjacent
+    return (pLeft < bRight && pRight > bLeft && pTop < bBottom && pBottom > bTop);
 }
 
 // Start the engine

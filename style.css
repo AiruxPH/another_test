@@ -16,8 +16,26 @@ body {
     /* Gave it some space off the absolute bottom edge */
 }
 
+.container {
+    position: relative;
+    /* Anchor point for our absolute platforms */
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+}
+
 .square {
     width: 40px;
     height: 40px;
     background-color: black;
+    z-index: 10;
+    /* Ensure player renders on top of platforms */
+}
+
+/* Styles for our solid physical structures */
+.platform {
+    position: absolute;
+    background-color: #333333;
+    border-radius: 4px;
+    z-index: 5;
 }

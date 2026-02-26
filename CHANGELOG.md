@@ -20,9 +20,12 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - `style.css`: Changed layout from perfectly centered to resting near the bottom (`align-items: flex-end` with `padding-bottom: 20%`), proving more vertical airspace for the jump mechanics.
 
-## [2026-02-26] - Polish & Tweaks (Controls, Dash, Sprint)
+## [2026-02-26] - Polish & Tweaks (Controls, Dash, Sprint, Platforms)
 ### Added
 - `script.js`: Added "Double Tap to Sprint". Tapping a directional key (`ArrowLeft/A` or `ArrowRight/D`) twice within 250ms triggers a sprint state, increasing max speed and acceleration (`SPRINT_MAX_SPEED = 1200`, `SPRINT_ACCELERATION = 4000`).
+- `script.js`: Added **AABB Collision** to allow the player to collide with solid platforms. Separated X and Y movement steps in the `gameLoop` for accurate collision resolution (head-bonking, landing, and wall-hugging).
+- `style.css`: Added `.platform` class to render purely aesthetic solid rectangles in the DOM that map exactly to the physics engine coordinates.
+- `script.js`: Updated jump logic to use an `entity.onGround` state tracked by the platform collider, allowing jumping off arbitrary surfaces rather than just `y === 0`.
 ### Changed
 - `script.js`: Fixed a bug where players couldn't jump immediately after landing from a long fall. The jump buffer now correctly queues a ground jump if the jump key is pressed slightly before hitting the floor, rather than burning the double jump.
 - `script.js`: Refined the dash mechanic. Added dynamic vertical velocity to the dash based on current movement state (arcs upwards if jumping, angles downwards if falling, slight bump if flat).
