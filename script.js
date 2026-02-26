@@ -66,14 +66,16 @@ function initPlatforms() {
         platDiv.style.width = plat.width + 'px';
         platDiv.style.height = plat.height + 'px';
 
-        // Since the container is horizontally centered and bottom aligned...
-        // We match exactly the transform logic we use for the player entity.
-        // We offset the rendering by subtracting half the width and height so (x,y) represents the center of the platform
+        // --- VISUAL RENDERING OFFSET ---
+        // Platform x is its horizontal center. CSS left:50% means 0 is center.
+        // To center it physically, we translate the left edge back by half width.
         const renderX = plat.x - (plat.width / 2);
-        // Important: CSS transforms visually translate Y downwards if positive. 
-        // Our physics Y is negative upwards. But because the HTML sets origin at top-left of the centered container,
-        // we just push it down/up using translation.
-        const renderY = plat.y - (plat.height / 2);
+
+        // Platform y is its TOP surface. CSS bottom:20vh means 0 is the floor baseline.
+        // translateY(y) moves the bottom edge downwards to y.
+        // We want the TOP edge to be at plat.y, so we push the bottom edge down by plat.height
+        // resulting in the top edge sitting exactly at plat.y.
+        const renderY = plat.y + plat.height;
 
         platDiv.style.transform = `translate(${renderX}px, ${renderY}px)`;
         container.appendChild(platDiv);
@@ -334,7 +336,11 @@ function gameLoop(timestamp) {
     }
 
     // DOM rendering mapping the physics position
-    box.style.transform = `translate(${entity.x}px, ${entity.y}px)`;
+    // Player x is horizontal center. CSS left:50% baseline.
+    const renderX = entity.x - PLAYER_HALF_SIZE;
+    // Player y is absolute bottom edge. CSS bottom:20vh baseline.
+    const renderY = entity.y;
+    box.style.transform = `translate(${renderX}px, ${renderY}px)`;
 
     // Request next frame
     requestAnimationFrame(gameLoop);

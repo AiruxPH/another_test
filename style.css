@@ -6,22 +6,26 @@
 }
 
 body {
+    margin: 0;
+    overflow: hidden;
     background-color: #ffffff;
     min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
-    /* Moved from center to bottom */
-    padding-bottom: 10%;
-    /* Gave it some space off the absolute bottom edge */
 }
 
 .container {
     position: relative;
-    /* Anchor point for our absolute platforms */
-    display: flex;
-    justify-content: center;
-    align-items: flex-end;
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Base style for physical objects */
+.square,
+.platform {
+    position: absolute;
+    bottom: 20vh;
+    /* Shared absolute physics baseline */
+    left: 50%;
+    /* Shared X origin */
 }
 
 .square {
@@ -34,7 +38,6 @@ body {
 
 /* Styles for our solid physical structures */
 .platform {
-    position: absolute;
     background-color: #333333;
     border-radius: 4px;
     z-index: 5;
