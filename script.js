@@ -8,6 +8,7 @@ const DASH_SPEED = 2000; // Explosive dash velocity
 const DASH_DURATION = 0.15; // How long the dash lasts (seconds)
 const DASH_COOLDOWN = 0.5; // Seconds before next dash is allowed
 const FAST_FALL_GRAVITY = 15000; // Drastically increased gravity when holding down (downward dash)
+const WALL_BOUNCE = 0.5; // Restitution factor when hitting a wall (0 to 1)
 
 // Simple PhysicsEntity structure
 const entity = {
@@ -37,10 +38,13 @@ let jumpBufferTimer = 0; // Timer to remember jump inputs
 function handleKeyDown(event) {
     if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
         if (entity.y === 0) {
-            // On the ground: Set a jump buffer for 150ms
+            // On the ground: jump instantly
+            entity.vy = JUMP_VELOCITY;
+        } else if (entity.vy > 0 && entity.y < 100) {
+            // Falling and very close to the ground: buffer a ground jump for when we land
             jumpBufferTimer = 0.15;
         } else if (!entity.hasDoubleJumped) {
-            // In the air and haven't double jumped yet: jump instantly
+            // High in the air and haven't double jumped yet: double jump instantly
             entity.vy = JUMP_VELOCITY;
             entity.hasDoubleJumped = true;
         }
@@ -174,6 +178,32 @@ function gameLoop(timestamp) {
     // p(n+1) = v * t + p(n)
     entity.y += entity.vy * elapsed;
     entity.x += entity.vx * elapsed;
+
+    // --- SCREEN BOUNDS (Walls) ---
+    // The square is centered at x=0. 
+    // The window width is window.innerWidth. 
+    // The square width is 40px (so 20px on each side of center).
+    const max_x = (window.innerWidth / 2) - 20;
+    const min_x = -max_x;
+
+    if (entity.x > max_x) {
+        entity.x = max_x;
+        // Bounce off the right wall
+        entity.vx = -entity.vx * WALL_BOUNCE;
+        if (entity.isDashing) {
+            entity.isDashing = false;
+            entity.dashCooldownTimer = DASH_COOLDOWN;
+        }
+    } else if (entity.x < min_x) {
+        entity.x = min_x;
+        // Bounce off the left wall
+        entity.vx = -entity.vx * WALL_BOUNCE;
+        if (entity.isDashing) {
+            entity.isDashing = false;
+            entity.dashCooldownTimer = DASH_COOLDOWN;
+        }
+    }
+    // -----------------------------
 
     // Collision Detection & Resolution (Listing 2, 7, 8 concept - simplified to a floor constraint)
     if (entity.y > 0) {

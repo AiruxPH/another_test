@@ -10,11 +10,14 @@ body {
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-end;
+    /* Moved from center to bottom */
+    padding-bottom: 10%;
+    /* Gave it some space off the absolute bottom edge */
 }
 
 .square {
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     background-color: black;
 }
