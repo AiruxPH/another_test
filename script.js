@@ -122,14 +122,17 @@ function update(time, delta) {
     if (isDashing) {
         dashTimer -= delta;
         if (dashTimer <= 0) {
+            // End dash
             isDashing = false;
             dashCooldownTimer = DASH_COOLDOWN;
             player.body.setAllowGravity(true);
+            player.setVelocityX(player.body.velocity.x * 0.5); // cut speed so we don't slide forever
         } else {
-            // Enforce dash velocity and disable gravity temporarily
+            // Enforce dash velocity
             player.setVelocityX(DASH_SPEED * facingDirection);
-            player.setVelocityY(0);
-            player.body.setAllowGravity(false);
+            // Apply a fraction of gravity (20%) so it arcs slightly downwards over time
+            player.body.setAllowGravity(true);
+            player.setGravityY(-1600); // 2000 standard gravity - 1600 = 400 effective gravity (20%)
             return; // Skip normal movement while dashing
         }
     }
@@ -139,7 +142,18 @@ function update(time, delta) {
         isDashing = true;
         dashTimer = DASH_DURATION;
         player.setVelocityX(DASH_SPEED * facingDirection);
-        player.setVelocityY(-150); // slight bump
+
+        // Dynamic vertical bump based on current trajectory
+        if (player.body.velocity.y < -50) {
+            // Moving up: extend the jump arc slightly
+            player.setVelocityY(-400);
+        } else if (player.body.velocity.y > 50) {
+            // Moving down: thrust diagonally downwards
+            player.setVelocityY(400);
+        } else {
+            // perfectly flat: slight upward bump
+            player.setVelocityY(-200);
+        }
         return;
     }
 
