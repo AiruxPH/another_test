@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - `index.html`: Removed content, kept only a single div.
 - `style.css`: Simplified to basic fundamentals, made the box a 200x200 square.
 
+## [2026-02-26] - Variable Jump Height
+### Added
+- `script.js`: Added jump cut logic in `handleKeyUp`. Releasing the jump key (Space or W) while moving upwards reduces the upward velocity, allowing for short taps to result in small hops, and holding the button to provide full jump height.
+
 ## [2026-02-26] - Refactoring
 ### Changed
 - `index.html`: Extracted all physics, movement logic, and event listeners out of the HTML file.

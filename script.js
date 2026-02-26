@@ -38,6 +38,13 @@ function handleKeyDown(event) {
 }
 
 function handleKeyUp(event) {
+    if (event.code === "Space" || event.key === "w" || event.key === "W") {
+        // Variable Jump Height: If releasing the jump key while moving upwards, 
+        // cut the upward velocity to half. This creates a "short hop".
+        if (entity.vy < 0) {
+            entity.vy *= 0.5;
+        }
+    }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
         keys.ArrowLeft = false;
     }
