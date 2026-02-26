@@ -4,6 +4,9 @@ const JUMP_VELOCITY = -800; // Initial upward velocity
 const MOVE_ACCELERATION = 2000; // Horizontal acceleration (pixels/s^2)
 const MAX_SPEED = 600; // Maximum horizontal speed (pixels/s)
 const FRICTION = 0.85; // Friction multiplier (sliding to a stop)
+const DASH_SPEED = 2000; // Explosive dash velocity
+const DASH_DURATION = 0.15; // How long the dash lasts (seconds)
+const DASH_COOLDOWN = 0.5; // Seconds before next dash is allowed
 
 // Simple PhysicsEntity structure
 const entity = {
@@ -13,7 +16,11 @@ const entity = {
     vy: 0,      // velocity in y
     ax: 0,      // acceleration in x
     ay: GRAVITY_Y, // acceleration in y (gravity)
-    hasDoubleJumped: false // tracks if double jump was used
+    hasDoubleJumped: false, // tracks if double jump was used
+    isDashing: false,     // is currently dashing
+    dashTimer: 0,         // time left in current dash
+    dashCooldownTimer: 0, // time left before can dash again
+    facingDirection: 1    // 1 for right, -1 for left
 };
 
 const keys = {
@@ -38,9 +45,20 @@ function handleKeyDown(event) {
     }
     if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
         keys.ArrowLeft = true;
+        entity.facingDirection = -1;
     }
     if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
         keys.ArrowRight = true;
+        entity.facingDirection = 1;
+    }
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
+        if (!entity.isDashing && entity.dashCooldownTimer <= 0) {
+            entity.isDashing = true;
+            entity.dashTimer = DASH_DURATION;
+            // Instantly override velocity for the dash burst
+            entity.vx = DASH_SPEED * entity.facingDirection;
+            entity.vy = 0; // Suspend gravity momentarily
+        }
     }
 }
 
@@ -66,13 +84,40 @@ function gameLoop(timestamp) {
     const elapsed = (timestamp - lastTime) / 1000; // convert to seconds
     lastTime = timestamp;
 
-    // Handle horizontal input (apply acceleration)
-    if (keys.ArrowLeft) {
-        entity.ax = -MOVE_ACCELERATION;
-    } else if (keys.ArrowRight) {
-        entity.ax = MOVE_ACCELERATION;
+    // Manage Dash timers
+    if (entity.dashCooldownTimer > 0) {
+        entity.dashCooldownTimer -= elapsed;
+    }
+
+    if (entity.isDashing) {
+        entity.dashTimer -= elapsed;
+        if (entity.dashTimer <= 0) {
+            // End dash
+            entity.isDashing = false;
+            entity.dashCooldownTimer = DASH_COOLDOWN;
+            // Optionally scale down velocity immediately after dash so we don't slide forever
+            entity.vx *= 0.5;
+        } else {
+            // While dashing, enforce dash velocity and zero gravity
+            entity.vx = DASH_SPEED * entity.facingDirection;
+            entity.vy = 0;
+            entity.ay = 0;
+            entity.ax = 0;
+        }
     } else {
-        entity.ax = 0; // stop accelerating when key is released
+        // Restore normal gravity when not dashing
+        entity.ay = GRAVITY_Y;
+
+        // Handle horizontal input (apply acceleration)
+        if (keys.ArrowLeft) {
+            entity.ax = -MOVE_ACCELERATION;
+            entity.facingDirection = -1;
+        } else if (keys.ArrowRight) {
+            entity.ax = MOVE_ACCELERATION;
+            entity.facingDirection = 1;
+        } else {
+            entity.ax = 0; // stop accelerating when key is released
+        }
     }
 
     // Handle jump buffering
@@ -90,15 +135,17 @@ function gameLoop(timestamp) {
     entity.vy += entity.ay * elapsed;
     entity.vx += entity.ax * elapsed;
 
-    // Apply friction (frame-rate independent approximation)
-    entity.vx *= Math.pow(FRICTION, elapsed * 60);
+    if (!entity.isDashing) {
+        // Apply friction (frame-rate independent approximation)
+        entity.vx *= Math.pow(FRICTION, elapsed * 60);
 
-    // Clamp velocity to max speed
-    if (entity.vx > MAX_SPEED) entity.vx = MAX_SPEED;
-    if (entity.vx < -MAX_SPEED) entity.vx = -MAX_SPEED;
+        // Clamp velocity to max speed (only when not dashing)
+        if (entity.vx > MAX_SPEED) entity.vx = MAX_SPEED;
+        if (entity.vx < -MAX_SPEED) entity.vx = -MAX_SPEED;
 
-    // Stop completely if moving very slowly to avoid micro-sliding
-    if (Math.abs(entity.vx) < 5 && entity.ax === 0) entity.vx = 0;
+        // Stop completely if moving very slowly to avoid micro-sliding
+        if (Math.abs(entity.vx) < 5 && entity.ax === 0) entity.vx = 0;
+    }
 
     // p(n+1) = v * t + p(n)
     entity.y += entity.vy * elapsed;

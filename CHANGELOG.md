@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 - `index.html`: Removed content, kept only a single div.
 - `style.css`: Simplified to basic fundamentals, made the box a 200x200 square.
 
+## [2026-02-26] - Dash Mechanic
+### Added
+- `script.js`: Added Dash ability. Pressing `Shift` creates a 0.15-second horizontal burst of speed (`DASH_SPEED = 2000`) in the facing direction, suspending gravity and normal friction. Includes a 0.5-second cooldown.
+
 ## [2026-02-26] - Double Jump
 ### Added
 - `script.js`: Added `hasDoubleJumped` state to the physics entity. You can now press the jump key a second time while in the air to execute a double jump.
