@@ -10,6 +10,9 @@ body {
     overflow: hidden;
     background-color: #ffffff;
     min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .container {
@@ -18,27 +21,10 @@ body {
     height: 100vh;
 }
 
-/* Base style for physical objects */
-.square,
-.platform {
-    position: absolute;
-    bottom: 20vh;
-    /* Shared absolute physics baseline */
-    left: 50%;
-    /* Shared X origin */
-}
-
-.square {
-    width: 40px;
-    height: 40px;
-    background-color: black;
-    z-index: 10;
-    /* Ensure player renders on top of platforms */
-}
-
-/* Styles for our solid physical structures */
-.platform {
-    background-color: #333333;
-    border-radius: 4px;
-    z-index: 5;
+#game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }

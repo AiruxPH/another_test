@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-02-26] - Major Engine Rewrite (Phaser.js)
+### Removed
+- `script.js`: Entirely removed the custom Euler physics engine, custom AABB mathematical collision engine, and manual `requestAnimationFrame` game loops.
+- `index.html` & `style.css`: Removed all hardcoded DOM elements (`div.square`, `div.platform`).
+### Added
+- Root: Downloaded `phaser.min.js` directly into the project folder for 100% offline local development.
+- `index.html`: Added `<div id="game-container"></div>` and linked to `phaser.min.js`.
+### Changed
+- `script.js`: Transitioned precisely designed mechanics to **Phaser 3 Arcade Physics**. Re-wrote Double Jump, Dash, Fast Fall, Double-Tap Sprint, and platform collisions to use Phaser API (`player.setVelocity()`, `player.setAcceleration()`).
+- `style.css`: Updated `body` to center the new Phaser canvas component natively.
+
 All notable changes to this project will be documented in this file.
 
 ## [2026-02-26]

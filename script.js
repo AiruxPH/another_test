@@ -1,373 +1,211 @@
-// Physics logic following listings 1, 3, 4, 5, 9
-const GRAVITY_Y = 2000; // Pixels per second squared
-const JUMP_VELOCITY = -800; // Initial upward velocity
-const MOVE_ACCELERATION = 2000; // Horizontal acceleration (pixels/s^2)
-const MAX_SPEED = 600; // Maximum horizontal speed (pixels/s)
-const FRICTION = 0.85; // Friction multiplier (sliding to a stop)
-const DASH_SPEED = 2000; // Explosive dash velocity
-const DASH_DURATION = 0.15; // How long the dash lasts (seconds)
-const DASH_COOLDOWN = 0.5; // Seconds before next dash is allowed
-const FAST_FALL_GRAVITY = 15000; // Drastically increased gravity when holding down (downward dash)
-const WALL_BOUNCE = 0.5; // Restitution factor when hitting a wall (0 to 1)
-
-const SPRINT_MAX_SPEED = 1200; // Max horizontal speed when sprinting
-const SPRINT_ACCELERATION = 4000; // Horizontal acceleration when sprinting
-
-const PLAYER_SIZE = 40; // Player width/height in px
-const PLAYER_HALF_SIZE = PLAYER_SIZE / 2;
-
-// Simple PhysicsEntity structure
-const entity = {
-    x: 0,       // current horizontal offset
-    y: 0,       // current vertical offset (0 is floor)
-    vx: 0,      // velocity in x
-    vy: 0,      // velocity in y
-    ax: 0,      // acceleration in x
-    ay: GRAVITY_Y, // acceleration in y (gravity)
-    hasDoubleJumped: false, // tracks if double jump was used
-    isDashing: false,     // is currently dashing
-    dashTimer: 0,         // time left in current dash
-    dashCooldownTimer: 0, // time left before can dash again
-    facingDirection: 1,    // 1 for right, -1 for left
-    isSprinting: false,    // tracks if the character is sprinting
-    onGround: true         // tracked by collision engine
+// --- PHASER 3 CONFIGURATION ---
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    parent: 'game-container',
+    backgroundColor: '#ffffff', // Explicitly set white background so black player is visible
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 2000 }, // Match our old GRAVITY_Y roughly
+            debug: false
+        }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
 };
 
-const keys = {
-    ArrowLeft: false,
-    ArrowRight: false,
-    ArrowDown: false
-};
+const game = new Phaser.Game(config);
 
-const box = document.getElementById("main-box");
-let lastTime = 0;
-let jumpBufferTimer = 0; // Timer to remember jump inputs
+// --- GLOBAL VARIABLES ---
+let player;
+let platforms;
+let cursors;
+let keys;
 
-// Variables for double-tap detection
+// Movement constants (Tweaked for Phaser Arcade Physics)
+const MOVE_ACCELERATION = 2000;
+const MAX_SPEED = 400;
+const SPRINT_ACCELERATION = 4000;
+const SPRINT_MAX_SPEED = 800;
+const JUMP_VELOCITY = -800;
+const FRICTION = 0.85; // Arcade physics damping
+
+// Dash & Special Move State
+let isDashing = false;
+let dashTimer = 0;
+let dashCooldownTimer = 0;
+const DASH_SPEED = 1500;
+const DASH_DURATION = 150; // ms in Phaser
+const DASH_COOLDOWN = 500; // ms
+let facingDirection = 1;
+
+let hasDoubleJumped = false;
+let isSprinting = false;
+
+// Double tap detection
 let lastLeftTapTime = 0;
 let lastRightTapTime = 0;
-const DOUBLE_TAP_DELAY = 0.25; // seconds
+const DOUBLE_TAP_DELAY = 250; // ms
 
-// --- PLATFORMS ---
-// Coordinates are relative to the player's start position (0,0)
-const platforms = [
-    { x: -300, y: -100, width: 200, height: 20 }, // Left step
-    { x: 100, y: -200, width: 200, height: 20 },  // Right high step
-    { x: -100, y: -350, width: 200, height: 20 }  // Top middle step
-];
+// --- SCENE FUNCTIONS ---
 
-// Reference to HTML container to append platforms
-const container = document.querySelector('.container');
-
-function initPlatforms() {
-    platforms.forEach(plat => {
-        const platDiv = document.createElement('div');
-        platDiv.classList.add('platform');
-        platDiv.style.width = plat.width + 'px';
-        platDiv.style.height = plat.height + 'px';
-
-        // --- VISUAL RENDERING OFFSET ---
-        // Platform x is its horizontal center. CSS left:50% means 0 is center.
-        // To center it physically, we translate the left edge back by half width.
-        const renderX = plat.x - (plat.width / 2);
-
-        // Platform y is its TOP surface. CSS bottom:20vh means 0 is the floor baseline.
-        // translateY(y) moves the bottom edge downwards to y.
-        // We want the TOP edge to be at plat.y, so we push the bottom edge down by plat.height
-        // resulting in the top edge sitting exactly at plat.y.
-        const renderY = plat.y + plat.height;
-
-        platDiv.style.transform = `translate(${renderX}px, ${renderY}px)`;
-        container.appendChild(platDiv);
-    });
+function preload() {
+    // No external assets yet. We will generate graphics dynamically.
 }
-// Run once on load
-initPlatforms();
-// -----------------
 
-function handleKeyDown(event) {
-    if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
-        if (entity.onGround) {
-            // On the ground: jump instantly
-            entity.vy = JUMP_VELOCITY;
-        } else if (entity.vy > 0 && Math.abs(entity.y) < 100) {
-            // Falling and very close to the ground: buffer a ground jump for when we land
-            jumpBufferTimer = 0.15;
-        } else if (!entity.hasDoubleJumped) {
-            // High in the air and haven't double jumped yet: double jump instantly
-            entity.vy = JUMP_VELOCITY;
-            entity.hasDoubleJumped = true;
-        }
-    }
-    if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
-        if (!keys.ArrowLeft) { // newly pressed
-            const now = performance.now() / 1000;
-            if (now - lastLeftTapTime < DOUBLE_TAP_DELAY) {
-                entity.isSprinting = true;
-            }
-            lastLeftTapTime = now;
-        }
-        keys.ArrowLeft = true;
-        if (!entity.isDashing) entity.facingDirection = -1; // Only change facing if not dashing
-    }
-    if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
-        if (!keys.ArrowRight) { // newly pressed
-            const now = performance.now() / 1000;
-            if (now - lastRightTapTime < DOUBLE_TAP_DELAY) {
-                entity.isSprinting = true;
-            }
-            lastRightTapTime = now;
-        }
-        keys.ArrowRight = true;
-        if (!entity.isDashing) entity.facingDirection = 1; // Only change facing if not dashing
-    }
-    if (event.code === "ArrowDown" || event.key === "s" || event.key === "S") {
-        keys.ArrowDown = true;
-    }
-    if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-        if (!entity.isDashing && entity.dashCooldownTimer <= 0) {
-            entity.isDashing = true;
-            entity.dashTimer = DASH_DURATION;
-            // Instantly override velocity for the dash burst
-            entity.vx = DASH_SPEED * entity.facingDirection;
+function create() {
+    // 1. Create Platforms (Static Physics Group)
+    platforms = this.physics.add.staticGroup();
 
-            // Dynamic vertical bump based on current trajectory
-            if (entity.vy < 0) {
-                // Moving up: extend the jump arc slightly
-                entity.vy = -300;
-            } else if (entity.vy > 0) {
-                // Moving down: thrust diagonally downwards
-                entity.vy = 300;
-            } else {
-                // Perfectly flat: slight upward bump
-                entity.vy = -150;
-            }
-        }
+    // Recreate our old platforms visually using Phaser Rectangles
+    // Note: Arcade physics static groups need a texture generally, but we can make one on the fly
+    const graphics = this.add.graphics();
+    graphics.fillStyle(0x333333, 1);
+    graphics.fillRect(0, 0, 10, 10);
+    graphics.generateTexture('platformTexture', 10, 10);
+    graphics.destroy();
+
+    // Base floor (to replace our y=0 constraint)
+    const floor = platforms.create(window.innerWidth / 2, window.innerHeight - 50, 'platformTexture');
+    floor.setDisplaySize(window.innerWidth, 100).refreshBody();
+
+    // Floating platforms (adjusting coordinates to fit center-origin screens roughly)
+    const p1 = platforms.create(window.innerWidth / 2 - 300, window.innerHeight - 200, 'platformTexture');
+    p1.setDisplaySize(200, 20).refreshBody();
+
+    const p2 = platforms.create(window.innerWidth / 2 + 100, window.innerHeight - 300, 'platformTexture');
+    p2.setDisplaySize(200, 20).refreshBody();
+
+    const p3 = platforms.create(window.innerWidth / 2 - 100, window.innerHeight - 450, 'platformTexture');
+    p3.setDisplaySize(200, 20).refreshBody();
+
+    // 2. Create Player
+    // Generate a quick texture for the 40x40 black square
+    const pGraphics = this.add.graphics();
+    pGraphics.fillStyle(0x000000, 1);
+    pGraphics.fillRect(0, 0, 40, 40);
+    pGraphics.generateTexture('playerTexture', 40, 40);
+    pGraphics.destroy();
+
+    player = this.physics.add.sprite(window.innerWidth / 2, window.innerHeight - 150, 'playerTexture');
+
+    // Player Physics Properties
+    player.setCollideWorldBounds(true); // Replaces our manual screen bounds!
+    player.setBounce(0.5, 0); // Wall bouncing (50% restitution on X, 0 on Y)
+    player.setMaxVelocity(MAX_SPEED, 3000); // Limit max speeds
+    player.setDragX(1000); // Friction replacement
+
+    // 3. Collisions
+    this.physics.add.collider(player, platforms, onPlatformLand, null, this);
+
+    // 4. Input Setup
+    cursors = this.input.keyboard.createCursorKeys();
+    keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT');
+}
+
+function onPlatformLand(playerBody, platform) {
+    if (player.body.touching.down) {
+        hasDoubleJumped = false;
     }
 }
 
-function handleKeyUp(event) {
-    if (event.code === "Space" || event.key === "w" || event.key === "W" || event.code === "ArrowUp") {
-        // Variable Jump Height: If releasing the jump key while moving upwards, 
-        // cut the upward velocity to half. This creates a "short hop".
-        if (entity.vy < 0) {
-            entity.vy *= 0.5;
-        }
-    }
-    if (event.code === "ArrowLeft" || event.key === "a" || event.key === "A") {
-        keys.ArrowLeft = false;
-        if (!keys.ArrowRight) entity.isSprinting = false; // Stop sprinting if released
-    }
-    if (event.code === "ArrowRight" || event.key === "d" || event.key === "D") {
-        keys.ArrowRight = false;
-        if (!keys.ArrowLeft) entity.isSprinting = false; // Stop sprinting if released
-    }
-    if (event.code === "ArrowDown" || event.key === "s" || event.key === "S") {
-        keys.ArrowDown = false;
-    }
-}
+function update(time, delta) {
+    // --- TIMERS ---
+    if (dashCooldownTimer > 0) dashCooldownTimer -= delta;
 
-// Game Loop
-function gameLoop(timestamp) {
-    if (!lastTime) lastTime = timestamp;
-    const elapsed = (timestamp - lastTime) / 1000; // convert to seconds
-    lastTime = timestamp;
-
-    // Manage Dash timers
-    if (entity.dashCooldownTimer > 0) {
-        entity.dashCooldownTimer -= elapsed;
-    }
-
-    if (entity.isDashing) {
-        entity.dashTimer -= elapsed;
-        if (entity.dashTimer <= 0) {
-            // End dash
-            entity.isDashing = false;
-            entity.dashCooldownTimer = DASH_COOLDOWN;
-            // Optionally scale down velocity immediately after dash so we don't slide forever
-            entity.vx *= 0.5;
+    // --- DASH LOGIC ---
+    if (isDashing) {
+        dashTimer -= delta;
+        if (dashTimer <= 0) {
+            isDashing = false;
+            dashCooldownTimer = DASH_COOLDOWN;
+            player.body.setAllowGravity(true);
         } else {
-            // While dashing, enforce dash velocity
-            entity.vx = DASH_SPEED * entity.facingDirection;
-            // Apply a fraction of gravity (e.g., 20%) so it arcs slightly downwards over time
-            entity.ay = GRAVITY_Y * 0.2;
-            entity.ax = 0;
+            // Enforce dash velocity and disable gravity temporarily
+            player.setVelocityX(DASH_SPEED * facingDirection);
+            player.setVelocityY(0);
+            player.body.setAllowGravity(false);
+            return; // Skip normal movement while dashing
         }
+    }
+
+    // Dash Initiation
+    if (Phaser.Input.Keyboard.JustDown(keys.SHIFT) && !isDashing && dashCooldownTimer <= 0) {
+        isDashing = true;
+        dashTimer = DASH_DURATION;
+        player.setVelocityX(DASH_SPEED * facingDirection);
+        player.setVelocityY(-150); // slight bump
+        return;
+    }
+
+    // --- HORIZONTAL MOVEMENT ---
+    const leftDown = cursors.left.isDown || keys.A.isDown;
+    const rightDown = cursors.right.isDown || keys.D.isDown;
+
+    // Double tap to sprint
+    if (Phaser.Input.Keyboard.JustDown(cursors.left) || Phaser.Input.Keyboard.JustDown(keys.A)) {
+        if (time - lastLeftTapTime < DOUBLE_TAP_DELAY) isSprinting = true;
+        lastLeftTapTime = time;
+    }
+    if (Phaser.Input.Keyboard.JustDown(cursors.right) || Phaser.Input.Keyboard.JustDown(keys.D)) {
+        if (time - lastRightTapTime < DOUBLE_TAP_DELAY) isSprinting = true;
+        lastRightTapTime = time;
+    }
+    if (!leftDown && !rightDown) {
+        isSprinting = false;
+    }
+
+    const currentAccel = isSprinting ? SPRINT_ACCELERATION : MOVE_ACCELERATION;
+    const currentMaxV = isSprinting ? SPRINT_MAX_SPEED : MAX_SPEED;
+    player.setMaxVelocity(currentMaxV, 3000); // Adjust max velocity dynamic
+
+    if (leftDown) {
+        player.setAccelerationX(-currentAccel);
+        facingDirection = -1;
+    } else if (rightDown) {
+        player.setAccelerationX(currentAccel);
+        facingDirection = 1;
     } else {
-        // Fast falling: if holding down and moving downwards (or at apex)
-        if (keys.ArrowDown && entity.vy >= -100) {
-            entity.ay = FAST_FALL_GRAVITY;
-        } else {
-            // Restore normal gravity when not dashing
-            entity.ay = GRAVITY_Y;
-        }
+        player.setAccelerationX(0); // Let drag/friction take over
+    }
 
-        // Handle horizontal input (apply acceleration)
-        let currentAcceleration = entity.isSprinting ? SPRINT_ACCELERATION : MOVE_ACCELERATION;
+    // --- VERTICAL MOVEMENT (Jumping) ---
+    const jumpDown = Phaser.Input.Keyboard.JustDown(cursors.up) || Phaser.Input.Keyboard.JustDown(keys.W) || Phaser.Input.Keyboard.JustDown(cursors.space);
+    const jumpHeld = cursors.up.isDown || keys.W.isDown || cursors.space.isDown;
+    const downDown = cursors.down.isDown || keys.S.isDown;
 
-        if (keys.ArrowLeft) {
-            entity.ax = -currentAcceleration;
-            entity.facingDirection = -1;
-        } else if (keys.ArrowRight) {
-            entity.ax = currentAcceleration;
-            entity.facingDirection = 1;
-        } else {
-            entity.ax = 0; // stop accelerating when key is released
-            entity.isSprinting = false; // ensure sprinting stops when keys are released entirely
+    if (jumpDown) {
+        if (player.body.touching.down) {
+            // Ground jump
+            player.setVelocityY(JUMP_VELOCITY);
+        } else if (!hasDoubleJumped) {
+            // Double jump
+            player.setVelocityY(JUMP_VELOCITY);
+            hasDoubleJumped = true;
         }
     }
 
-    // Handle jump buffering
-    if (jumpBufferTimer > 0) {
-        jumpBufferTimer -= elapsed;
-        // If we are on the floor and the jump is buffered, jump!
-        if (entity.y === 0) {
-            entity.vy = JUMP_VELOCITY;
-            jumpBufferTimer = 0; // Consume the jump buffer
-        }
+    // Variable jump height (release early to cut speed)
+    if (!jumpHeld && player.body.velocity.y < -100) {
+        player.setVelocityY(player.body.velocity.y * 0.9); // Smoother dampening in Phaser
     }
 
-    // Euler Integration
-    // v(n+1) = a * t + v(n)
-    entity.vy += entity.ay * elapsed;
-    entity.vx += entity.ax * elapsed;
-
-    if (!entity.isDashing) {
-        // Apply friction (frame-rate independent approximation)
-        entity.vx *= Math.pow(FRICTION, elapsed * 60);
-
-        // Clamp velocity to max speed (only when not dashing)
-        let currentMaxSpeed = entity.isSprinting ? SPRINT_MAX_SPEED : MAX_SPEED;
-        if (entity.vx > currentMaxSpeed) entity.vx = currentMaxSpeed;
-        if (entity.vx < -currentMaxSpeed) entity.vx = -currentMaxSpeed;
-
-        // Stop completely if moving very slowly to avoid micro-sliding
-        if (Math.abs(entity.vx) < 5 && entity.ax === 0) entity.vx = 0;
+    // Fast Fall (downward dash)
+    if (downDown && player.body.velocity.y >= -100) {
+        player.setGravityY(10000); // Extra gravity multiplier
+    } else {
+        player.setGravityY(0); // Reset to world default
     }
-
-    // p(n+1) = v * t + p(n)
-
-    // 1. Move X and check horizontal collisions
-    entity.x += entity.vx * elapsed;
-    for (let p of platforms) {
-        if (checkAABB(entity, p)) {
-            if (entity.vx > 0) {
-                // Moving right, hit left edge
-                entity.x = p.x - (p.width / 2) - PLAYER_HALF_SIZE;
-            } else if (entity.vx < 0) {
-                // Moving left, hit right edge
-                entity.x = p.x + (p.width / 2) + PLAYER_HALF_SIZE;
-            }
-            entity.vx = 0;
-            if (entity.isDashing) {
-                entity.isDashing = false;
-                entity.dashCooldownTimer = DASH_COOLDOWN;
-            }
-        }
-    }
-
-    // 2. Move Y and check vertical collisions
-    // Track floor state to allow jumping
-    let onFloor = false;
-    entity.y += entity.vy * elapsed;
-
-    for (let p of platforms) {
-        if (checkAABB(entity, p)) {
-            if (entity.vy > 0) {
-                // Falling down, landed on top
-                entity.y = p.y - (p.height / 2) - PLAYER_HALF_SIZE;
-                entity.vy = 0;
-                onFloor = true;
-                entity.hasDoubleJumped = false; // Reset double jump
-            } else if (entity.vy < 0) {
-                // Jumping up, hit bottom (bonk head)
-                entity.y = p.y + (p.height / 2) + PLAYER_HALF_SIZE;
-                entity.vy = 0;
-            }
-        }
-    }
-
-    // Original Floor Constraint (y = 0 is absolute bottom floor)
-    if (entity.y >= 0) {
-        entity.y = 0;
-        entity.hasDoubleJumped = false;
-        onFloor = true;
-        if (entity.vy > 0) entity.vy = 0;
-    }
-
-    // If we are on ANY valid floor surface, allow ground jumps (buffered or future)
-    // Note: The jump condition check in handleKeyDown needs to know if we are on floor. 
-    // We update a global or entity property so events can see it.
-    entity.onGround = onFloor;
-
-    // --- SCREEN BOUNDS (Walls) ---
-    // The square is centered at x=0. 
-    // The window width is window.innerWidth. 
-    const max_x = (window.innerWidth / 2) - PLAYER_HALF_SIZE;
-    const min_x = -max_x;
-
-    if (entity.x > max_x) {
-        entity.x = max_x;
-        // Bounce off the right wall
-        entity.vx = -entity.vx * WALL_BOUNCE;
-        if (entity.isDashing) {
-            entity.isDashing = false;
-            entity.dashCooldownTimer = DASH_COOLDOWN;
-        }
-    } else if (entity.x < min_x) {
-        entity.x = min_x;
-        // Bounce off the left wall
-        entity.vx = -entity.vx * WALL_BOUNCE;
-        if (entity.isDashing) {
-            entity.isDashing = false;
-            entity.dashCooldownTimer = DASH_COOLDOWN;
-        }
-    }
-    // -----------------------------
-
-    // Collision Detection & Resolution (Listing 2, 7, 8 concept - simplified to a floor constraint)
-    if (entity.y > 0) {
-        entity.y = 0; // Rest position (floor)
-        entity.hasDoubleJumped = false; // Reset double jump when landing
-        // Stop vertical motion only if we aren't currently jumping up
-        if (entity.vy > 0) {
-            entity.vy = 0;
-        }
-    }
-
-    // DOM rendering mapping the physics position
-    // Player x is horizontal center. CSS left:50% baseline.
-    const renderX = entity.x - PLAYER_HALF_SIZE;
-    // Player y is absolute bottom edge. CSS bottom:20vh baseline.
-    const renderY = entity.y;
-    box.style.transform = `translate(${renderX}px, ${renderY}px)`;
-
-    // Request next frame
-    requestAnimationFrame(gameLoop);
 }
 
-// AABB Collision Helper
-// Returns true if entity rect overlaps platform rect
-function checkAABB(ent, plat) {
-    // Player is PLAYER_SIZE, centered
-    const pLeft = ent.x - PLAYER_HALF_SIZE;
-    const pRight = ent.x + PLAYER_HALF_SIZE;
-    const pTop = ent.y - PLAYER_HALF_SIZE;
-    const pBottom = ent.y + PLAYER_HALF_SIZE;
-
-    // Platform is centered at (plat.x, plat.y)
-    const bLeft = plat.x - (plat.width / 2);
-    const bRight = plat.x + (plat.width / 2);
-    const bTop = plat.y - (plat.height / 2);
-    const bBottom = plat.y + (plat.height / 2);
-
-    // strictly < and > to prevent sticking when perfectly adjacent
-    return (pLeft < bRight && pRight > bLeft && pTop < bBottom && pBottom > bTop);
-}
-
-// Start the engine
-requestAnimationFrame(gameLoop);
-
-// Event Listeners (moved from body inline attributes)
-window.addEventListener('keydown', handleKeyDown);
-window.addEventListener('keyup', handleKeyUp);
+// Handle window resizing seamlessly
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+    // Note: In a real game, you'd also need to reposition platforms/world bounds on resize,
+    // but this suffices for the immediate demo bounding.
+});
